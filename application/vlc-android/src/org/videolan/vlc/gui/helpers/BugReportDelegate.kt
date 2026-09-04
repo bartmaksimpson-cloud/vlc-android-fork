@@ -30,7 +30,7 @@ object BugReportDelegate {
     private const val TAG = "VLC/BugReport"
 
     // ВАЖНО: адрес вашего Cloudflare Worker. Токен GitHub живёт ТАМ, не здесь.
-    private const val ENDPOINT = "https://vlc-bugreport.<ваш-субдомен>.workers.dev/report"
+    private const val ENDPOINT = "https://vlc-bugreport.waxelpacho-svc.workers.dev/report"
 
     /** Пункты списка «что не так» — соответствуют массиву R.array.bug_report_categories */
     private fun categories(ctx: Context): Array<String> =

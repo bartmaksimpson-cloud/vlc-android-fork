@@ -83,6 +83,8 @@ android {
             initWith release
             signingConfig = signingConfigs.release
             matchingFallbacks = ['release']
+            // свой пакет: иначе сборка конфликтует с официальным VLC по подписи
+            applicationIdSuffix ".report"
         }
         vlcBundle {
             initWith release

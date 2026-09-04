@@ -87,6 +87,12 @@ android {
         signedRelease {
             initWith release
             matchingFallbacks = ['release']
+            // Пакет сборки — appId + ".report", чтобы вставать рядом с официальным VLC.
+            // APP_ID и авторитет TV-провайдера обязаны совпадать с applicationId:
+            // из APP_ID собирается авторитет провайдера миниатюр и адресуются
+            // сообщения виджета, а авторитеты провайдеров уникальны на всё устройство.
+            buildConfigField "String", "APP_ID", "\"${rootProject.ext.appId}.report\""
+            resValue 'string', 'tv_provider_authority', "${rootProject.ext.appId}.report.tv"
         }
         dev {
             initWith debug
