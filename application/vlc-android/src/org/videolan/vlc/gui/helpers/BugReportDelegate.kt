@@ -10,14 +10,15 @@ import android.media.AudioManager
 import android.media.MediaCodecList
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.videolan.libvlc.interfaces.IMedia
+import org.videolan.tools.AppScope
 import org.videolan.tools.Logcat
 import org.videolan.vlc.PlaybackService
 import org.videolan.vlc.R
@@ -56,16 +57,38 @@ object BugReportDelegate {
     }
 
     private fun send(activity: FragmentActivity, service: PlaybackService, category: String) {
+        val app = activity.applicationContext
         val title = "[${Build.MODEL}] $category"
-        activity.lifecycleScope.launch {
-            val body = withContext(Dispatchers.IO) { build(activity, service, category) }
-            val ok = withContext(Dispatchers.IO) { post(title, category, body) }
-            AlertDialog.Builder(activity)
-                .setMessage(if (ok) R.string.bug_report_sent else R.string.bug_report_failed)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+        Toast.makeText(app, R.string.bug_report_sending, Toast.LENGTH_SHORT).show()
+        // AppScope, а не lifecycleScope: привязка к экрану плеера отменяла корутину
+        // при закрытии диалога и рвала сокет посреди запроса (SocketException: Socket closed)
+        AppScope.launch(Dispatchers.IO) {
+            val body = build(app, service, category)
+            // Сохраняем всегда, до отправки: отчёт не должен пропадать из-за сбоя сети.
+            // Файл достаётся через adb pull, даже если прокси недоступен.
+            val saved = saveLocally(app, body)
+            Log.i(TAG, "отчёт собран: ${body.length} символов, файл: $saved")
+            val ok = post(title, category, body)
+            withContext(Dispatchers.Main) {
+                val msg = when {
+                    ok -> app.getString(R.string.bug_report_sent)
+                    saved != null -> app.getString(R.string.bug_report_saved_only, saved)
+                    else -> app.getString(R.string.bug_report_failed)
+                }
+                Toast.makeText(app, msg, Toast.LENGTH_LONG).show()
+            }
         }
     }
+
+    /** Пишет отчёт в каталог приложения на общем хранилище. Возвращает путь или null. */
+    private fun saveLocally(ctx: Context, body: String): String? = runCatching {
+        val dir = ctx.getExternalFilesDir(null) ?: return@runCatching null
+        val f = java.io.File(dir, "vlc-report-" +
+                java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+                    .format(java.util.Date()) + ".txt")
+        f.writeText(body)
+        f.absolutePath
+    }.getOrElse { Log.e(TAG, "не удалось сохранить отчёт", it); null }
 
     // ---------- сбор ----------
 
@@ -115,9 +138,56 @@ object BugReportDelegate {
             b.append("- Длительность: ${mw.length} мс\n")
         }
 
+        // Одна ссылка на медиа и для дорожек, и для статистики: getMedia()
+        // увеличивает счётчик ссылок libvlc, поэтому её обязательно освободить —
+        // иначе каждый отчёт удерживает медиа живым.
+        val media = runCatching { service.mediaplayer.media }.getOrNull()
+        try {
+            appendTracks(b, media)
+            appendStats(b, media, service)
+        } finally {
+            runCatching { media?.release() }
+        }
+
+        b.sec("Видеодекодеры")
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                // Список резался первыми 20 записями, а начинается он с аудио —
+                // видеодекодеры, ради которых секция и нужна, не попадали в отчёт
+                // ни разу. Аудио отбрасываем, видео печатаем целиком: их десятки,
+                // не сотни.
+                val decoders = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                    .filter { info -> !info.isEncoder && info.supportedTypes.any { it.startsWith("video/") } }
+                if (decoders.isEmpty()) b.append("- не найдено\n")
+                decoders.forEach { info ->
+                    info.supportedTypes.filter { it.startsWith("video/") }.forEach { mime ->
+                        b.append("- ${info.name} $mime")
+                        // Заявленный максимум против фактического файла — ровно то,
+                        // что нужно знать, когда декодер выгружается сам на 4K.
+                        runCatching {
+                            val vc = info.getCapabilitiesForType(mime).videoCapabilities
+                            b.append(" до ${vc.supportedWidths.upper}x${vc.supportedHeights.upper}")
+                            b.append(" @${vc.supportedFrameRates.upper} fps")
+                        }
+                        b.append('\n')
+                    }
+                }
+            } else b.append("- API < 21\n")
+        }.onFailure { b.append("- недоступны: ${it.message}\n") }
+
+        // без права READ_LOGS сюда попадают только собственные строки VLC — этого достаточно
+        b.sec("Логи VLC (последние 200 строк)")
+        b.append("```\n")
+        b.append(runCatching { Logcat.logcat.lines().takeLast(200).joinToString("\n") }
+            .getOrElse { "логи недоступны: ${it.message}\n" })
+        b.append("\n```\n")
+        return b.toString()
+    }
+
+    /** Дорожки текущего медиа: кодеки, разрешение, частота кадров файла. */
+    private fun appendTracks(b: StringBuilder, media: IMedia?) {
         b.sec("Дорожки")
         runCatching {
-            val media = service.mediaplayer.media
             if (media == null) b.append("- недоступны\n") else {
                 for (i in 0 until media.trackCount) {
                     val t = media.getTrack(i) ?: continue
@@ -134,40 +204,38 @@ object BugReportDelegate {
                 }
             }
         }.onFailure { b.append("- недоступны: ${it.message}\n") }
+    }
 
+    /**
+     * Счётчики воспроизведения — потерянные кадры и битрейты, ради которых отчёт
+     * и существует.
+     *
+     * Раньше здесь стоял только `service.lastStats`, а это статистика ПРЕДЫДУЩЕГО
+     * файла: `PlayerController` заполняет её при смене медиа. Пока играет первый
+     * файл, там null — отчёт писал «недоступна» ровно тогда, когда цифры нужны.
+     * Берём счётчики того, что играет сейчас; lastStats остаётся запасным на
+     * случай, когда воспроизведение уже закончилось.
+     */
+    private fun appendStats(b: StringBuilder, media: IMedia?, service: PlaybackService) {
         b.sec("Статистика воспроизведения")
-        val s = service.lastStats
-        if (s == null) b.append("- недоступна\n") else {
-            b.append("- Потеряно кадров: ${s.lostPictures}\n")
-            b.append("- Показано кадров: ${s.displayedPictures}\n")
-            b.append("- Повреждено блоков демуксера: ${s.demuxCorrupted}\n")
-            b.append("- Разрывов потока: ${s.demuxDiscontinuity}\n")
-            b.append("- Битрейт демуксера: ${s.demuxBitrate}\n")
-            b.append("- Входной битрейт: ${s.inputBitrate}\n")
-            b.append("- Проиграно аудиобуферов: ${s.playedAbuffers}\n")
-            b.append("- Потеряно аудиобуферов: ${s.lostAbuffers}\n")
-            // готовый вывод, чтобы не читать цифры вручную в каждом тикете
-            if (s.lostPictures > 0 || s.demuxCorrupted > 0)
-                b.append("\n> Потеряны кадры или повреждены блоки: битый файл, нехватка CPU либо сбой аппаратного декодера.\n")
-            if (s.lostAbuffers > 0)
-                b.append("\n> Потеряны аудиобуферы: заикание звука.\n")
+        val s = runCatching { media?.stats }.getOrNull() ?: service.lastStats
+        if (s == null) {
+            b.append("- недоступна (ничего не воспроизводится)\n")
+            return
         }
-
-        b.sec("Аппаратные декодеры")
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
-                    .filter { !it.isEncoder }
-                    .take(40)
-                    .forEach { b.append("- ${it.name}\n") }
-            } else b.append("- API < 21\n")
-        }.onFailure { b.append("- недоступны: ${it.message}\n") }
-
-        b.sec("Логи (последние 500 строк logcat)")
-        b.append("```\n")
-        b.append(runCatching { Logcat.logcat }.getOrElse { "логи недоступны: ${it.message}\n" })
-        b.append("\n```\n")
-        return b.toString()
+        b.append("- Потеряно кадров: ${s.lostPictures}\n")
+        b.append("- Показано кадров: ${s.displayedPictures}\n")
+        b.append("- Повреждено блоков демуксера: ${s.demuxCorrupted}\n")
+        b.append("- Разрывов потока: ${s.demuxDiscontinuity}\n")
+        b.append("- Битрейт демуксера: ${s.demuxBitrate}\n")
+        b.append("- Входной битрейт: ${s.inputBitrate}\n")
+        b.append("- Проиграно аудиобуферов: ${s.playedAbuffers}\n")
+        b.append("- Потеряно аудиобуферов: ${s.lostAbuffers}\n")
+        // готовый вывод, чтобы не читать цифры вручную в каждом тикете
+        if (s.lostPictures > 0 || s.demuxCorrupted > 0)
+            b.append("\n> Потеряны кадры или повреждены блоки: битый файл, нехватка CPU либо сбой аппаратного декодера.\n")
+        if (s.lostAbuffers > 0)
+            b.append("\n> Потеряны аудиобуферы: заикание звука.\n")
     }
 
     // ---------- отправка ----------
@@ -182,8 +250,8 @@ object BugReportDelegate {
             conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
-                connectTimeout = 15000
-                readTimeout = 20000
+                connectTimeout = 20000
+                readTimeout = 40000
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
             }
             // JSONObject экранирует сам — руками кавычки не клеим

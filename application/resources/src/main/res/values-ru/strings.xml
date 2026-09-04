@@ -997,4 +997,6 @@
     <string name="update_details">%1$s (%2$d МБ). Установить сейчас?</string>
     <string name="update_install">Установить</string>
     <string name="update_downloading">Скачиваю обновление…</string>
+    <string name="bug_report_sending">Отправляю отчёт…</string>
+    <string name="bug_report_saved_only">Отправить не удалось. Отчёт сохранён в %1$s</string>
 </resources>
