@@ -18,7 +18,11 @@ android {
     buildToolsVersion = '36.0.0'
 }
 
-include ':libvlcjni:libvlc', ':medialibrary'
+// Нативные модули есть только при полной сборке (dev).
+// Для debug/release libvlc и medialibrary берутся готовыми из Maven.
+if (file('libvlcjni/libvlc').isDirectory()) {
+    include ':libvlcjni:libvlc', ':medialibrary'
+}
 include ':application:tools', ':application:resources', ':application:mediadb', ':application:app', ':application:live-plot-graph', ':application:television', ':application:donations', ':application:remote-access-server'
 include ':application:vlc-android'
 include ':application:moviepedia'

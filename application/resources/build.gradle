@@ -68,8 +68,9 @@ dependencies {
     api "org.jetbrains.kotlinx:kotlinx-coroutines-android:$rootProject.ext.kotlinx_version"
 
     api project(':application:tools')
-    devApi project(':libvlcjni:libvlc')
-    devApi project(':medialibrary')
+    // модули есть только при полной dev-сборке; иначе всё берётся из Maven ниже
+    if (findProject(':libvlcjni:libvlc') != null) devApi project(':libvlcjni:libvlc')
+    if (findProject(':medialibrary') != null) devApi project(':medialibrary')
     debugApi "org.videolan.android:libvlc-all:$rootProject.ext.libvlcVersion"
     debugApi "org.videolan.android:medialibrary-all:$rootProject.ext.medialibraryVersion"
     releaseApi "org.videolan.android:libvlc-all:$rootProject.ext.libvlcVersion"
