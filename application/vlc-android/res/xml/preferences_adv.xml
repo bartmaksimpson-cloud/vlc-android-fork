@@ -151,6 +151,10 @@
                 android:title="@string/debug_logs"/>
 
         <PreferenceScreen
+                android:key="check_update"
+                android:title="@string/update_check"/>
+
+        <PreferenceScreen
                 android:key="nightly_install"
                 android:title="@string/install_nightly"/>
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Своё имя, чтобы плитка в лаунчере TV не путалась с официальным VLC.
+         Подхватывается автоматически: sourceSets.debug уже указывает на flavors/debug/res -->
+    <string name="app_name" translatable="false">VLC Report</string>
+</resources>

@@ -1445,4 +1445,30 @@
     <string name="feedback_email_warning_try_anyway">Try anyway</string>
     <string name="forum_url" translatable="false">https://forum.videolan.org/viewforum.php?f=35</string>
     <string name="doc_url" translatable="false">https://docs.videolan.me/vlc-user/android/</string>
+
+    <string name="bug_report_title">Report a problem</string>
+    <string name="bug_report_privacy_notice">The report includes the file name, device model, playback statistics and app logs. It is sent to a public issue tracker.</string>
+    <string name="bug_report_send">Send</string>
+    <string name="bug_report_sent">Report sent. Thank you.</string>
+    <string name="bug_report_failed">Could not send the report. Check the network connection.</string>
+    <string-array name="bug_report_categories">
+        <item>Will not play / open error</item>
+        <item>Picture breaks up, artifacts, green screen</item>
+        <item>No sound</item>
+        <item>Audio stutter or out of sync</item>
+        <item>Stuttering, dropped frames</item>
+        <item>Subtitle problem</item>
+        <item>App freezes or crashes</item>
+        <item>Something else</item>
+    </string-array>
+
+    <string name="update_check">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_not_configured">Update source is not configured in this build.</string>
+    <string name="update_check_failed">Could not check for updates.</string>
+    <string name="update_up_to_date">You already have the latest version.</string>
+    <string name="update_available">Update available</string>
+    <string name="update_details">%1$s (%2$d MB). Install now?</string>
+    <string name="update_install">Install</string>
+    <string name="update_downloading">Downloading update…</string>
 </resources>

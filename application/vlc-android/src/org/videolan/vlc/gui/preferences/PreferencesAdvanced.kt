@@ -108,6 +108,7 @@ import org.videolan.vlc.util.Permissions
 import org.videolan.vlc.util.share
 import java.io.File
 import java.io.IOException
+import org.videolan.vlc.gui.helpers.UpdateDelegate
 
 private const val FILE_PICKER_RESULT_CODE = 10000
 private const val RESULT_VALUE_CLEAR_HISTORY = 1
@@ -230,6 +231,10 @@ class PreferencesAdvanced : BasePreferenceFragment(), SharedPreferences.OnShared
             "debug_logs" -> {
                 val intent = Intent(requireContext(), DebugLogActivity::class.java)
                 startActivity(intent)
+                return true
+            }
+            "check_update" -> {
+                UpdateDelegate.check(requireActivity())
                 return true
             }
             "nightly_install" -> {

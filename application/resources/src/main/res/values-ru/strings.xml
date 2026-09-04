@@ -971,4 +971,30 @@
     <string name="talkback_action_rewind">Назад на %s сек.</string>
     <string name="talkback_action_forward">Вперёд на %s сек.</string>
     <string name="talkback_display_settings">Показать настройки</string>
-    </resources>
+    
+    <string name="bug_report_title">Сообщить о проблеме</string>
+    <string name="bug_report_privacy_notice">В отчёт войдут имя файла, модель устройства, статистика воспроизведения и логи приложения. Он отправляется в публичный трекер задач.</string>
+    <string name="bug_report_send">Отправить</string>
+    <string name="bug_report_sent">Отчёт отправлен. Спасибо.</string>
+    <string name="bug_report_failed">Не удалось отправить отчёт. Проверьте подключение к сети.</string>
+    <string-array name="bug_report_categories">
+        <item>Не воспроизводится, ошибка открытия</item>
+        <item>Рассыпается картинка, артефакты, зелёный экран</item>
+        <item>Нет звука</item>
+        <item>Заикание звука или рассинхрон</item>
+        <item>Рывки, пропуск кадров</item>
+        <item>Проблема с субтитрами</item>
+        <item>Приложение зависает или вылетает</item>
+        <item>Другое</item>
+    </string-array>
+
+    <string name="update_check">Проверить обновления</string>
+    <string name="update_checking">Проверяю обновления…</string>
+    <string name="update_not_configured">В этой сборке не задан источник обновлений.</string>
+    <string name="update_check_failed">Не удалось проверить обновления.</string>
+    <string name="update_up_to_date">У вас уже последняя версия.</string>
+    <string name="update_available">Доступно обновление</string>
+    <string name="update_details">%1$s (%2$d МБ). Установить сейчас?</string>
+    <string name="update_install">Установить</string>
+    <string name="update_downloading">Скачиваю обновление…</string>
+</resources>
