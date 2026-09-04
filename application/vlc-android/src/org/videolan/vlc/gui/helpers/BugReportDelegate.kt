@@ -178,10 +178,32 @@ object BugReportDelegate {
         // без права READ_LOGS сюда попадают только собственные строки VLC — этого достаточно
         b.sec("Логи VLC (последние 200 строк)")
         b.append("```\n")
-        b.append(runCatching { Logcat.logcat.lines().takeLast(200).joinToString("\n") }
+        b.append(runCatching { trimLateSpam(Logcat.logcat.lines()).takeLast(200).joinToString("\n") }
             .getOrElse { "логи недоступны: ${it.message}\n" })
         b.append("\n```\n")
         return b.toString()
+    }
+
+    /**
+     * Выбрасывает поток строк «picture is too late», оставляя первые пять и счётчик.
+     *
+     * Их прилетает по десятку в секунду, и в отчёте они вытесняли из окна логов
+     * всё остальное — в том числе строки открытия декодера, ради которых лог и
+     * читают. Сам факт опозданий не теряется: он и так виден по счётчику
+     * потерянных кадров выше.
+     */
+    private fun trimLateSpam(lines: List<String>): List<String> {
+        var late = 0
+        val out = ArrayList<String>(lines.size)
+        for (l in lines) {
+            if (l.contains("picture is too late")) {
+                late++
+                if (late > 5) continue
+            }
+            out.add(l)
+        }
+        if (late > 5) out.add("… ещё ${late - 5} строк «picture is too late» вырезано")
+        return out
     }
 
     /** Дорожки текущего медиа: кодеки, разрешение, частота кадров файла. */
