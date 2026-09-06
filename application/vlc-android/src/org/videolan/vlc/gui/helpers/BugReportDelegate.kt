@@ -19,6 +19,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.tools.AppScope
+import org.videolan.tools.Settings
+import org.videolan.tools.KEY_VIDEO_MATCH_FRAME_RATE
+import org.videolan.tools.KEY_NETWORK_CACHING_VALUE
+import org.videolan.tools.KEY_HARDWARE_ACCELERATION
 import org.videolan.tools.Logcat
 import org.videolan.vlc.PlaybackService
 import org.videolan.vlc.R
@@ -92,6 +96,14 @@ object BugReportDelegate {
 
     // ---------- сбор ----------
 
+    // hwAccelLabel переводит хранимое число в то, что человек видит в меню.
+    private fun hwAccelLabel(value: String?): String = when (value) {
+        "0" -> "выключено"
+        "1" -> "только декодирование (без прямого вывода)"
+        "2" -> "полное"
+        else -> "автоматически"
+    }
+
     private fun StringBuilder.sec(name: String) = append("\n\n## ").append(name).append('\n')
 
     private fun build(ctx: Context, service: PlaybackService, category: String): String {
@@ -118,6 +130,37 @@ object BugReportDelegate {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 b.append("- HDR: ${d.hdrCapabilities?.supportedHdrTypes?.joinToString() ?: "нет"}\n")
             }
+            // Список режимов — половина ответа на «почему дёргается». Плеер
+            // просит систему подобрать частоту под 23.976, но если панель
+            // отдаёт только 60 и 30 Гц, подбирать не из чего: 24 кадра на них
+            // нацело не ложатся, и повтор кадров будет неравномерным всегда.
+            // Без этого списка причину рывков ищут в декодере, где её нет.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val active = d.mode?.modeId
+                d.supportedModes?.forEach { m ->
+                    val mark = if (m.modeId == active) " ← сейчас" else ""
+                    b.append("- режим: ${m.physicalWidth}x${m.physicalHeight} @ ${m.refreshRate} Гц$mark\n")
+                }
+            }
+        }.onFailure { b.append("- недоступно: ${it.message}\n") }
+
+        b.sec("Настройки воспроизведения")
+        runCatching {
+            val prefs = Settings.getInstance(ctx)
+            // Аппаратное ускорение решает, идёт ли кадр из декодера прямо в
+            // видеослой или через поверхность интерфейса. На телевизорах,
+            // где интерфейс рисуется в 1080p поверх 4K-панели, второй путь
+            // означает лишнее масштабирование туда и обратно — то есть мыло,
+            // причина которого в отчёте иначе никак не видна.
+            val hw = prefs.getString(KEY_HARDWARE_ACCELERATION, "-1")
+            b.append("- Аппаратное ускорение: ${hwAccelLabel(hw)}\n")
+            b.append("- Подстройка частоты кадров: ")
+                .append(if (prefs.getBoolean(KEY_VIDEO_MATCH_FRAME_RATE, false)) "включена" else "выключена")
+                .append('\n')
+            val caching = prefs.getInt(KEY_NETWORK_CACHING_VALUE, 0)
+            b.append("- Сетевой буфер: ")
+                .append(if (caching > 0) "$caching мс" else "по умолчанию")
+                .append('\n')
         }.onFailure { b.append("- недоступно: ${it.message}\n") }
 
         b.sec("Аудиовыход")
