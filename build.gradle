@@ -61,9 +61,13 @@ allprojects {
 
 ext {
     appId = "org.videolan.vlc"
-    versionCode = 3070119
+    versionCode = 3070120
     vlcMajorVersion = project.hasProperty('forceVlc4') && project.getProperty('forceVlc4') ? 4 : 3
-    versionName = vlcMajorVersion == 3 ? '3.7.2 Beta 1' : '4.0.0-preview - ' + versionCode
+    // Имя версии у сборок форка своё и меняется само: у апстрима оно годами
+    // стоит на «3.7.2 Beta 1», и диалог обновления предлагал поставить ровно
+    // то, что уже стоит. Хвост versionCode различает сборки и попадает в имя
+    // файла — «VLC-Android-3.7.2-b120-all.apk».
+    versionName = vlcMajorVersion == 3 ? '3.7.2-b' + (versionCode % 1000) : '4.0.0-preview - ' + versionCode
     remoteAccessVersion = '0.21.0'
     libvlcVersion = vlcMajorVersion == 3 ? '3.7.5' :'4.0.0-eap29'
     medialibraryVersion = '0.13.22' + (vlcMajorVersion == 3 ? '' : '-vlc4')
