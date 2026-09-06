@@ -88,7 +88,11 @@ class FrameRateManager(val activity: FragmentActivity, val service: PlaybackServ
         //on Android 12 and up supports Frame Rate Strategy
         //for short video less than 5 minutes, only change frame rate if seamless
 
-        if (service.mediaplayer.length < SHORT_VIDEO_LENGTH) {
+        // Длина ещё неизвестна (0) — это не «короткий ролик». На старте серии
+        // длина приходит позже дорожки, и такой файл уезжал в ветку «только
+        // бесшовно», где телевизор переключение молча отклонял.
+        val length = service.mediaplayer.length
+        if (length in 1 until SHORT_VIDEO_LENGTH) {
             surface.setFrameRate(videoFrameRate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS)
         } else {
             //detect if a non-seamless refresh rate switch is about to happen
@@ -120,8 +124,9 @@ class FrameRateManager(val activity: FragmentActivity, val service: PlaybackServ
     fun setFrameRateM(videoFrameRate: Float, window: Window) {
         val wm = activity.getSystemService<WindowManager>()!!
         val display = wm.defaultDisplay
-        //only change frame rate if video is longer than 5 minutes
-        if (service.mediaplayer.length > SHORT_VIDEO_LENGTH) {
+        //only change frame rate if video is longer than 5 minutes (unknown length counts as long)
+        val length = service.mediaplayer.length
+        if (length <= 0 || length > SHORT_VIDEO_LENGTH) {
             //on older versions of Android use this manual frame rate switching method
             //ignore modes which don't match the current resolution, cause we want resolution to remain the same
             display.supportedModes?.let { supportedModes ->

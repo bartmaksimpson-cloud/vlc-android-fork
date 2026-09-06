@@ -999,4 +999,5 @@
     <string name="update_downloading">Скачиваю обновление…</string>
     <string name="bug_report_sending">Отправляю отчёт…</string>
     <string name="bug_report_saved_only">Отправить не удалось. Отчёт сохранён в %1$s</string>
+    <string name="decoder_over_limit">Кадр %1$dx%2$d выше предела аппаратного декодера (максимум по высоте %3$d) — отсюда софтверное декодирование и рывки. Настройками плеера это не лечится: нужен файл с высотой не больше %3$d.</string>
 </resources>

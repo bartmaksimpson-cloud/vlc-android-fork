@@ -201,6 +201,7 @@ import org.videolan.vlc.gui.dialogs.SleepTimerDialog
 import org.videolan.vlc.gui.dialogs.VLCBottomSheetDialogFragment.Companion.shouldInterceptRemote
 import org.videolan.vlc.gui.dialogs.adapters.VlcTrack
 import org.videolan.vlc.gui.dialogs.showContext
+import org.videolan.vlc.gui.helpers.DecoderLimitDelegate
 import org.videolan.vlc.gui.helpers.BitmapUtil
 import org.videolan.vlc.gui.helpers.KeycodeListener
 import org.videolan.vlc.gui.helpers.PlayerKeyListenerDelegate
@@ -1680,6 +1681,11 @@ open class VideoPlayerActivity : AppCompatActivity(), PlaybackService.Callback, 
                     val vt = service.currentVideoTrack
                     if (vt != null)
                         fov = if (vt.getProjection() == IMedia.VideoTrack.Projection.Rectangular) 0f else DEFAULT_FOV
+                    // Частота дорожки известна только ЗДЕСЬ. На Playing её ещё
+                    // нет, и подгонка частоты экрана уходила в пустоту: при
+                    // переходе к следующей серии экран оставался на режиме от
+                    // предыдущей, и приходилось дёргать галочку в настройках.
+                    applyFrameRateMatch()
                 }
                 MediaPlayer.Event.SeekableChanged -> overlayDelegate.updateSeekable(event.seekable)
                 MediaPlayer.Event.PausableChanged -> overlayDelegate.updatePausable(event.pausable)
@@ -1718,6 +1724,34 @@ open class VideoPlayerActivity : AppCompatActivity(), PlaybackService.Callback, 
         return listOf()
     }
 
+    // Частота дорожки, под которую экран уже переключён, вместе с файлом, у
+    // которого её взяли. Подгонку дёргают из двух мест (старт и выбор
+    // видеодорожки), и повторять переключение режима экрана на том же файле
+    // незачем: каждое из них на телевизоре — это чёрный кадр на секунду.
+    private var appliedFrameRate: Pair<String, Float>? = null
+
+    /**
+     * Подстроить частоту экрана под частоту текущей видеодорожки, если человек
+     * этого просил. Безопасно вызывать сколько угодно раз: пока файл и частота
+     * те же, ничего не делает.
+     */
+    private fun applyFrameRateMatch() {
+        if (!settings.getBoolean(KEY_VIDEO_MATCH_FRAME_RATE, false)) return
+        val service = service ?: return
+        val track = try {
+            service.mediaplayer.getSelectedVideoTrack()
+        } catch (e: IllegalStateException) {
+            null
+        } ?: return
+        if (track.getFrameRateDen() == 0) return
+        val rate = track.getFrameRateNum() / track.getFrameRateDen().toFloat()
+        val uri = service.currentMediaWrapper?.uri?.toString() ?: return
+        if (appliedFrameRate == Pair(uri, rate)) return
+        val surfaceView = rootView?.findViewById<View>(R.id.surface_video) as? SurfaceView ?: return
+        appliedFrameRate = Pair(uri, rate)
+        FrameRateManager(this, service).matchFrameRate(surfaceView, window)
+    }
+
     private fun onPlaying() {
         val mw = service?.currentMediaWrapper ?: return
         isPlaying = true
@@ -1733,6 +1767,9 @@ open class VideoPlayerActivity : AppCompatActivity(), PlaybackService.Callback, 
             wasPaused = false
         }
         setESTracks()
+        // Кадр выше того, что берёт аппаратный декодер, — самая частая причина
+        // рывков на телевизоре; заметить это может только сам плеер.
+        service?.let { DecoderLimitDelegate.check(this, it) }
         if (overlayDelegate.isHudRightBindingInitialized() && (overlayDelegate.hudRightBinding.playerOverlayTitle.length() == 0 || PlaybackService.hasRenderer()))
             overlayDelegate.setTitle(mw.title)
         // Get possible subtitles
@@ -1752,12 +1789,7 @@ open class VideoPlayerActivity : AppCompatActivity(), PlaybackService.Callback, 
         if (tipsDelegate.currentTip != null) pause()
 
         //if possible, match display with content frame rate
-        val preferMatchFrameRate =
-            settings.getBoolean(KEY_VIDEO_MATCH_FRAME_RATE, false)
-        if (preferMatchFrameRate) {
-            val surfaceView = rootView?.findViewById<View>(R.id.surface_video) as SurfaceView
-            FrameRateManager(this, service!!).matchFrameRate(surfaceView, window)
-        }
+        applyFrameRateMatch()
         overlayDelegate.updatePlaybackSpeedChip()
     }
 
