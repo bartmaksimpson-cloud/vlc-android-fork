@@ -21,6 +21,7 @@
 package org.videolan.resources
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.media.AudioManager
@@ -74,6 +75,7 @@ import org.videolan.tools.putSingle
 import org.videolan.vlc.VlcMigrationHelper
 import org.videolan.vlc.isVLC4
 import java.io.File
+import java.util.Locale
 import java.util.Collections
 
 object VLCOptions {
@@ -315,12 +317,37 @@ object VLCOptions {
 
         if (noVideo) media.addOption(":no-video")
         if (paused) media.addOption(":start-paused")
+        applyNetworkCaching(media, prefs.getInt(KEY_NETWORK_CACHING_VALUE, 0))
         if (!prefs.getBoolean(KEY_SUBTITLES_AUTOLOAD, true)) media.addOption(":sub-language=none")
 
         if (hasRenderer) {
             media.addOption(":sout-chromecast-audio-passthrough=" + prefs.getBoolean(KEY_CASTING_PASSTHROUGH, true))
             media.addOption(":sout-chromecast-conversion-quality=" + prefs.getString(KEY_CASTING_QUALITY, "2")!!)
         }
+    }
+
+    // Локальные источники, которым запас буфера не нужен: файл на диске читается
+    // ровно столько, сколько нужно, и лишний буфер только задерживает старт.
+    private val localSchemes = setOf("file", "fd", "content", "assets")
+
+    // networkCachingFloor — сколько миллисекунд буфера держать на сетевом
+    // источнике. Заминка домашней сети на полсекунды — обычное дело, и без
+    // запаса она выглядит как рассыпавшаяся на секунду картинка, которую легко
+    // принять за проблему декодера. Полторы секунды перекрывают такие заминки
+    // и стоят лишь настолько же более долгого старта.
+    private const val NETWORK_CACHING_FLOOR = 1500
+
+    /**
+     * Поднять буфер для сетевого источника. Общая настройка одна на всё — и на
+     * файл с флешки, и на файл с NAS, — а нужны им разные числа. Заданное
+     * человеком значение не понижаем: он мог поставить больше осознанно.
+     */
+    @VisibleForTesting
+    fun applyNetworkCaching(media: IMedia, configured: Int) {
+        val scheme = media.uri?.scheme?.lowercase(Locale.US) ?: return
+        if (scheme in localSchemes) return
+        if (configured >= NETWORK_CACHING_FLOOR) return
+        media.addOption(":network-caching=$NETWORK_CACHING_FLOOR")
     }
 
     fun getEqualizerEnabledState(context: Context): Boolean {
