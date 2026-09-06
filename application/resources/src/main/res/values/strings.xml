@@ -1471,6 +1471,7 @@
     <string name="update_details">%1$s (%2$d MB). Install now?</string>
     <string name="update_install">Install</string>
     <string name="update_downloading">Downloading update…</string>
+    <string name="update_download_failed">Could not download the update.</string>
     <string name="bug_report_sending">Sending report…</string>
     <string name="bug_report_saved_only">Could not send. Report saved to %1$s</string>
     <string name="decoder_over_limit">Frame %1$dx%2$d is taller than this device\'s hardware decoder (max height %3$d), so it falls back to software and stutters. Nothing in the player fixes this — the file needs a frame no taller than %3$d.</string>

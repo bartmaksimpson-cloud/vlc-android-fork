@@ -136,11 +136,27 @@ object AutoUpdate {
      * @param updateURL URL of the update
      * @param loading Function called when the update is downloading
      */
-    suspend fun downloadAndInstall(context: Application, updateURL: String, loading: (Boolean) -> Unit) = withContext(Dispatchers.IO) {
+    /**
+     * Скачивает обновление и запускает установку. Возвращает false, если скачать
+     * не удалось.
+     *
+     * Раньше исключение из [download] улетало в вызывающую корутину и гасло там:
+     * человек видел «начинаю скачивание» и ровно ничего дальше — ни установки,
+     * ни ошибки. Молчащий отказ хуже громкого: чинить нечего, потому что
+     * непонятно, что сломалось.
+     */
+    suspend fun downloadAndInstall(context: Application, updateURL: String, loading: (Boolean) -> Unit): Boolean = withContext(Dispatchers.IO) {
         withContext(Dispatchers.Main) { loading.invoke(true) }
-        download(context, updateURL)
+        try {
+            download(context, updateURL)
+        } catch (e: Exception) {
+            Log.e(TAG, "не удалось скачать обновление", e)
+            withContext(Dispatchers.Main) { loading.invoke(false) }
+            return@withContext false
+        }
         withContext(Dispatchers.Main) { loading.invoke(false) }
         installAPK(context)
+        true
     }
 
     /**
@@ -151,14 +167,29 @@ object AutoUpdate {
      */
     @Throws(IOException::class)
     private fun download(context: Application, url: String) {
-        val client = OkHttpClient.Builder().readTimeout(10, TimeUnit.SECONDS).connectTimeout(5, TimeUnit.SECONDS).build()
+        // Таймауты здесь не такие, как у проверки версии. Десять секунд на
+        // ЧТЕНИЕ — это про короткий ответ с текстом; здесь же качается сотня с
+        // лишним мегабайт, и на домашнем интернете любая заминка длиннее
+        // десяти секунд обрывала скачивание. Ограничение на всю операцию
+        // снимаем совсем: сколько нужно, столько и качаем.
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.MINUTES)
+            .callTimeout(0, TimeUnit.MILLISECONDS)
+            .build()
         val request = Request.Builder().url(url).build()
-        val response = client.newCall(request).execute()
-
-        val downloadedFile = File(context.cacheDir, "update.apk")
-        val sink: BufferedSink = downloadedFile.sink().buffer()
-        sink.writeAll(response.body!!.source())
-        sink.close()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code} при скачивании обновления")
+            val body = response.body ?: throw IOException("пустой ответ при скачивании обновления")
+            // Пишем во временный файл и переименовываем: оборванная закачка не
+            // должна оставить огрызок под именем готового обновления.
+            val part = File(context.cacheDir, "update.apk.part")
+            val sink: BufferedSink = part.sink().buffer()
+            sink.use { it.writeAll(body.source()) }
+            val downloadedFile = File(context.cacheDir, "update.apk")
+            downloadedFile.delete()
+            if (!part.renameTo(downloadedFile)) throw IOException("не удалось сохранить скачанное обновление")
+        }
     }
 
     /**

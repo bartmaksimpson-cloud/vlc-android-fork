@@ -83,13 +83,17 @@ object UpdateDelegate {
     private fun confirm(activity: FragmentActivity, rel: Release) {
         AlertDialog.Builder(activity)
             .setTitle(R.string.update_available)
-            .setMessage(activity.getString(R.string.update_details, rel.name, rel.mb))
+            // Номер версии, а не только имя файла: имя содержит versionName,
+            // который у сборок форка не меняется («3.7.2 Beta 1»), и диалог
+            // выглядел как предложение поставить ровно то, что уже стоит.
+            .setMessage(activity.getString(R.string.update_details, "${rel.name} (${rel.versionCode})", rel.mb))
             .setPositiveButton(R.string.update_install) { _, _ ->
                 activity.lifecycleScope.launch {
                     // скачивание и установка — переиспользуем готовое из VLC
-                    AutoUpdate.downloadAndInstall(activity.application, rel.url) { loading ->
+                    val ok = AutoUpdate.downloadAndInstall(activity.application, rel.url) { loading ->
                         if (loading) toast(activity, R.string.update_downloading)
                     }
+                    if (!ok) toast(activity, R.string.update_download_failed)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
