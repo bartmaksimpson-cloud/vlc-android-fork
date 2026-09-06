@@ -61,7 +61,7 @@ allprojects {
 
 ext {
     appId = "org.videolan.vlc"
-    versionCode = 3070120
+    versionCode = 3070121
     vlcMajorVersion = project.hasProperty('forceVlc4') && project.getProperty('forceVlc4') ? 4 : 3
     // Имя версии у сборок форка своё и меняется само: у апстрима оно годами
     // стоит на «3.7.2 Beta 1», и диалог обновления предлагал поставить ровно

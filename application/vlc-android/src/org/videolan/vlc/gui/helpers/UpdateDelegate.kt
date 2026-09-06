@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.videolan.tools.AppScope
 import org.videolan.vlc.R
 import org.videolan.vlc.util.AutoUpdate
 import java.net.HttpURLConnection
@@ -88,18 +89,26 @@ object UpdateDelegate {
             // выглядел как предложение поставить ровно то, что уже стоит.
             .setMessage(activity.getString(R.string.update_details, "${rel.name} (${rel.versionCode})", rel.mb))
             .setPositiveButton(R.string.update_install) { _, _ ->
-                activity.lifecycleScope.launch {
+                // ВАЖНО: не lifecycleScope экрана настроек. Сто с лишним
+                // мегабайт качаются минуту и дольше, а экран за это время
+                // уничтожается — от нажатия «Назад», от пересоздания, от чего
+                // угодно, — и корутина умирает вместе с ним. Молча: код после
+                // точки приостановки уже не выполняется, поэтому не появлялось
+                // ни установки, ни ошибки. Именно так это и выглядело со
+                // стороны: «начинаю скачивание» и тишина навсегда.
+                val app = activity.application
+                AppScope.launch {
                     // скачивание и установка — переиспользуем готовое из VLC
-                    val ok = AutoUpdate.downloadAndInstall(activity.application, rel.url) { loading ->
-                        if (loading) toast(activity, R.string.update_downloading)
+                    val ok = AutoUpdate.downloadAndInstall(app, rel.url) { loading ->
+                        if (loading) toast(app, R.string.update_downloading)
                     }
-                    if (!ok) toast(activity, R.string.update_download_failed)
+                    if (!ok) toast(app, R.string.update_download_failed)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun toast(activity: Activity, res: Int) =
-        Toast.makeText(activity, res, Toast.LENGTH_LONG).show()
+    private fun toast(ctx: Context, res: Int) =
+        Toast.makeText(ctx, res, Toast.LENGTH_LONG).show()
 }
